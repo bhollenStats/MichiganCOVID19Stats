@@ -1,0 +1,77 @@
+---
+title: "MichiganCOVID19Stats"
+author: "hollen"
+date: "3/24/2020"
+output: html_document
+params: 
+  mergeToday: 0
+---
+
+```{r setup, include=FALSE, echo = FALSE, warning = FALSE, error = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rvest)
+library(tidyverse)
+library(knitr)
+```
+
+## Michigan COVID-19 Evaluation
+
+During the COVID-19 outbreak, during which Michiganders were asked to remain at home and "Stay Home, Stay Safe," I decided to spend a bit of time to collect the outbreak reports from http://michigan.gov/coronavirus so that I could track the outbreak of the virus from each day's report.  
+
+To date I have not yet found a repository of all of the data collected so far in the state of Michigan, so I will use this application to collect the results from each day and merge them together in an accumulated data set, which I can store as an RData file as well as export to CSV for sharing with other Michiganders.  (in a future release!)
+
+Here are the values extracted from the website from today:
+
+```{r ScrapeMichiganDailyValues, echo = FALSE, warning = FALSE, error = FALSE}
+uriMichiganDaily <- "https://www.michigan.gov/coronavirus"
+txtMichiganDaily <- read_html(uriMichiganDaily)
+tblMichiganDaily <- html_table(txtMichiganDaily, header = FALSE, fill = TRUE)
+dfMichiganDaily <- as_tibble(tblMichiganDaily[[1]])
+dfMichiganDaily <- dfMichiganDaily %>%
+  transform(County = X1, 
+            TotalCases = as.numeric(X2), 
+            TotalDeaths = as.numeric(X3)) %>%
+  select(-X1, -X2, -X3) %>%
+  filter(County != 'County') %>%
+  filter(County != 'Total') %>% 
+  mutate(Date = Sys.Date()) %>%
+  arrange(desc(TotalCases))
+
+kable(dfMichiganDaily, caption = "Reported Michigan Cases Today")
+```
+
+```{r PersistWithAccumulatedValues, echo = FALSE, warning = FALSE, error = FALSE}
+load(file='dfCOVID19MichiganTotals.Rdata')
+# Append the new values to the current accumulated values
+if (params$mergeToday > 0) {
+  dfCOVID19MichiganTotals <- rbind(dfCOVID19MichiganTotals, dfMichiganDaily)
+  save(dfCOVID19MichiganTotals, file='dfCOVID19MichiganTotals.Rdata')
+  write_csv(dfCOVID19MichiganTotals, path='michigan_covid19_cases.csv')
+}
+```
+
+Here are the top ten counties or areas of total cases of COVID-19 to date:
+
+```{r TopTenCasesByArea, echo = FALSE, warning = FALSE, error = FALSE}
+dfResult <- dfCOVID19MichiganTotals %>% 
+  group_by(County) %>% 
+  summarise(AllCases=sum(TotalCases, na.rm = TRUE)) %>% 
+  arrange(desc(AllCases)) %>%
+  top_n(10)
+kable(dfResult, caption = "Top Ten Total Cases in Michigan by County/Area")
+```
+
+Here are the top ten counties or areas of total deaths of COVID-19 to date:
+
+```{r TopTenDeathsByArea, echo = FALSE, warning = FALSE, error = FALSE}
+dfResult <- dfCOVID19MichiganTotals %>% 
+  group_by(County) %>% 
+  summarise(AllDeaths=sum(TotalDeaths, na.rm = TRUE)) %>%
+  filter(AllDeaths > 0) %>%
+  arrange(desc(AllDeaths)) %>%
+  top_n(10)
+kable(dfResult, caption = "Top Ten Total Deaths in Michigan by County/Area")
+```
+
+As of today there are `r dfCOVID19MichiganTotals %>% select(TotalCases) %>% sum(na.rm = TRUE)` total cases in the state of Michigan and `r dfCOVID19MichiganTotals %>% select(TotalDeaths) %>% sum(na.rm = TRUE)` total deaths from this 2019 outbreak of COVID-19.
+
