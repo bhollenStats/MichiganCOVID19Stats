@@ -2,8 +2,10 @@
 title: "MichiganCOVID19Stats"
 author: "hollen"
 date: "3/24/2020"
-output: html_document
-params: 
+output:
+  pdf_document: default
+  html_document: default
+params:
   mergeToday: 0
 ---
 
@@ -20,7 +22,26 @@ During the COVID-19 outbreak, during which Michiganders were asked to remain at 
 
 To date I have not yet found a repository of all of the data collected so far in the state of Michigan, so I will use this application to collect the results from each day and merge them together in an accumulated data set, which I can store as an RData file as well as export to CSV for sharing with other Michiganders.  (in a future release!)
 
-Here are the values extracted from the website from today:
+#### Website Cummulative Totals for the Day
+
+```{r WebSiteCummTotals, echo = FALSE, warning = FALSE, error = FALSE}
+uriMiCummTots <- "https://www.michigan.gov/coronavirus/0,9753,7-406-98163-520743--,00.html"
+txtMiCummTots <- read_html(uriMiCummTots)
+tblMiCummTots <- html_table(txtMiCummTots, header = FALSE, fill = TRUE)
+dfMiCummTots <- as_tibble(tblMiCummTots[[1]])
+dfMiCummTots <- dfMiCummTots %>%
+  transform(County = X1, 
+            TotalCases = as.numeric(X2), 
+            TotalDeaths = as.numeric(X3)) %>%
+  select(-X1, -X2, -X3) %>%
+  filter(County != 'County') %>%
+  filter(County != 'Total') %>% 
+  mutate(County = as.character(County)) %>%
+  arrange(County)
+kable(dfMiCummTots)
+```
+
+This reports a total of `r dfMiCummTots %>% select(TotalCases) %>% sum(na.rm = TRUE)` cases with `r dfMiCummTots %>% select(TotalDeaths) %>% sum(na.rm = TRUE)` deaths.
 
 ```{r ScrapeMichiganDailyValues, echo = FALSE, warning = FALSE, error = FALSE}
 uriMichiganDaily <- "https://www.michigan.gov/coronavirus"
@@ -35,9 +56,8 @@ dfMichiganDaily <- dfMichiganDaily %>%
   filter(County != 'County') %>%
   filter(County != 'Total') %>% 
   mutate(Date = Sys.Date()) %>%
+  mutate(County = as.character(County)) %>%
   arrange(desc(TotalCases))
-
-kable(dfMichiganDaily, caption = "Reported Michigan Cases Today")
 ```
 
 ```{r PersistWithAccumulatedValues, echo = FALSE, warning = FALSE, error = FALSE}
@@ -48,9 +68,26 @@ if (params$mergeToday > 0) {
   save(dfCOVID19MichiganTotals, file='dfCOVID19MichiganTotals.Rdata')
   write_csv(dfCOVID19MichiganTotals, path='michigan_covid19_cases.csv')
 }
+dfCOVID19MichiganTotals <- dfCOVID19MichiganTotals %>%
+  mutate(County = as.character(County)) %>%
+  arrange(County)
 ```
 
-Here are the top ten counties or areas of total cases of COVID-19 to date:
+#### My Cummulative Totals to Date
+
+These are based on previously reported daily values which I'm collecting in this dataset and report as well as cases reported today:
+
+```{r DetermineMyAccumulatedTotals, echo = FALSE, warning = FALSE, error = FALSE}
+dfResult <- dfCOVID19MichiganTotals %>%
+  group_by(County) %>%
+  summarise(AllCases=sum(TotalCases, na.rm=TRUE), AllDeaths=sum(TotalDeaths, na.rm=TRUE)) %>%
+  arrange(County)
+kable(dfResult)
+```
+
+My data reflects a total of `r dfCOVID19MichiganTotals %>% select(TotalCases) %>% sum(na.rm = TRUE)` cases with `r dfCOVID19MichiganTotals %>% select(TotalDeaths) %>% sum(na.rm = TRUE)` deaths.
+
+#### Top Ten Cases by County from my Cummulative Data
 
 ```{r TopTenCasesByArea, echo = FALSE, warning = FALSE, error = FALSE}
 dfResult <- dfCOVID19MichiganTotals %>% 
@@ -58,10 +95,10 @@ dfResult <- dfCOVID19MichiganTotals %>%
   summarise(AllCases=sum(TotalCases, na.rm = TRUE)) %>% 
   arrange(desc(AllCases)) %>%
   top_n(10)
-kable(dfResult, caption = "Top Ten Total Cases in Michigan by County/Area")
+kable(dfResult)
 ```
 
-Here are the top ten counties or areas of total deaths of COVID-19 to date:
+#### Top Ten Deaths by County from my Cummulative Data
 
 ```{r TopTenDeathsByArea, echo = FALSE, warning = FALSE, error = FALSE}
 dfResult <- dfCOVID19MichiganTotals %>% 
@@ -70,8 +107,8 @@ dfResult <- dfCOVID19MichiganTotals %>%
   filter(AllDeaths > 0) %>%
   arrange(desc(AllDeaths)) %>%
   top_n(10)
-kable(dfResult, caption = "Top Ten Total Deaths in Michigan by County/Area")
+kable(dfResult)
 ```
 
-As of today there are `r dfCOVID19MichiganTotals %>% select(TotalCases) %>% sum(na.rm = TRUE)` total cases in the state of Michigan and `r dfCOVID19MichiganTotals %>% select(TotalDeaths) %>% sum(na.rm = TRUE)` total deaths from this 2019 outbreak of COVID-19.
+
 
